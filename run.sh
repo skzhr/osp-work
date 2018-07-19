@@ -19,13 +19,20 @@ ansible masters[0] -b -m fetch -a "src=/root/.kube/config dest=/root/.kube/confi
 oc login -u system:admin
 
 
-sh -x pv1.sh
-sh -x pv2.sh
-sh -x pv3.sh
+sh -x files/pv1.sh
+sh -x files/pv2.sh
+sh -x files/pv3.sh
 
-oc create -f template.yaml -n default
+oc create -f files/template.yaml -n default
+
+oc label namespace default name=default
 
 ansible masters -m shell -a"sed -i -e \"\:projectRequestTemplate: s:'':'default/project-request':\" /etc/origin/master/master-config.yaml"
+
+ansible masters -m shell -a"sed -i -e 3i\"\    ProjectRequestLimit:\n      configuration:\n        apiVersion: v1\n        kind: ProjectRequestLimitConfig\n        limits:\n        - selector:\n            client: alpha\n          maxProjects: 2\n        - selector:\n            client: beta \n          maxProjects: 2\n        - maxProjects: 1\" /etc/origin/master/master-config.yaml"
+
+
+
 ansible masters -m shell  -a"systemctl stop atomic-openshift-master-api"
 ansible masters -m shell -a"systemctl stop atomic-openshift-master-controllers"
 ansible nodes -m shell -a"systemctl stop atomic-openshift-node"
@@ -35,3 +42,8 @@ ansible masters -m shell -a"systemctl start atomic-openshift-node"
 ansible nodes -m shell -a"systemctl start atomic-openshift-node"
 
 date
+
+
+
+
+
