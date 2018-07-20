@@ -23,6 +23,8 @@ sh -x files/pv1.sh
 sh -x files/pv2.sh
 sh -x files/pv3.sh
 
+cat /root/pvs/* | oc create -f -
+
 oc create -f files/template.yaml -n default
 
 oc label namespace default name=default
@@ -41,9 +43,72 @@ ansible masters -m shell -a"systemctl start atomic-openshift-master-controllers"
 ansible masters -m shell -a"systemctl start atomic-openshift-node"
 ansible nodes -m shell -a"systemctl start atomic-openshift-node"
 
-date
+sleep 1m
+
+oc login -u Amy -p Amy
+oc login -u Andrew -p Andrew
+oc login -u Betty -p Betty
+oc login -u Brian -p Brian
+oc login -u common -p common
+
+oc login -u system:admin
+oc label user Amy client=alpha
+oc label user Andrew client=alpha
+oc label user Betty client=beta
+oc label user Brian client=beta
+oc label user common client=common
+
+oc login -u system:admin
+oc get all -o wide | grep po/docker-registry
+oc get pv | grep registry
+oc get all -o wide | grep po/router
+oc get pv
+oc new-project testnodejs
+oc new-app nodejs-mongo-persistent
+sleep 10m
+curl -D - -s  -o /dev/null nodejs-mongo-persistent-testnodejs.apps.$GUID.example.opentlc.com
+
+oc project default
+oc get nodes --show-labels | grep master
+ansible etcd -m shell -a"systemctl status etcd | grep Active"
+
+oc login https://loadbalancer.$GUID.internal:443 -u system:admin
+oc get route --all-namespaces
+oc get nodes --show-labels | grep env=infra
 
 
+oc get clusternetwork
+ansible masters -m shell -a"cat /etc/origin/master/master-config.yaml | grep projectRequestTemplate"
+oc describe template project-request | grep NetworkPolicy
+
+oc get pod --all-namespaces | grep logging
+oc get pod --all-namespaces | grep metrics
+oc get all -o wide | grep -e po/docker-registry -e po/router
+oc get all -o wide -n logging | grep po/
+oc get all -o wide -n openshift-metrics | grep po/
+oc get pod --all-namespaces | grep service
 
 
+oc project cicd
+oc new-app jenkins-persistent
+sleep 15m
+oc get pod | grep jenkins
+oc get pv | grep jenkins
 
+cd ~
+
+git clone https://github.com/OpenShiftDemos/openshift-tasks.git
+sed -i s/jboss-eap64-openshift:latest/jboss-eap64-openshift:1.7/ openshift-tasks/app-template.yaml
+oc new-app -f openshift-tasks/app-template.yaml
+oc create -f openshift-tasks/pipeline-bc.yaml
+oc start-build tasks-pipeline
+sleep 15m
+oc describe buildconfig tasks-pipeline
+oc autoscale dc/tasks --min 1 --max 2 --cpu-percent=80
+oc describe deploymentconfig tasks | grep Autoscaling
+
+oc get users --show-labels
+oc get nodes --show-labels | grep client
+ansible masters -m shell -a"cat /etc/origin/master/master-config.yaml | grep -A 12 ProjectRequestLimit:"
+ansible masters -m shell -a"cat /etc/origin/master/master-config.yaml | grep projectRequestTemplate"
+oc describe template project-request | grep LimitRange
